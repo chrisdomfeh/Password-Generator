@@ -1,26 +1,598 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Password Generator</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <script src="script.js" defer></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PassForge — Password Generator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #070b14;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --violet: #7c5cfc;
+      --cyan: #00e5ff;
+      --green: #00ff94;
+      --amber: #ffb300;
+      --red: #ff3d71;
+      --text: #e8eaf6;
+      --muted: rgba(232,234,246,0.45);
+      --radius: 20px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: 'Space Grotesk', sans-serif;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Animated background ── */
+    .bg-canvas {
+      position: fixed; inset: 0; z-index: 0;
+      pointer-events: none;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.25;
+    }
+    .orb-1 { width: 500px; height: 500px; background: var(--violet); top: -120px; left: -160px; animation: drift 14s ease-in-out infinite alternate; }
+    .orb-2 { width: 400px; height: 400px; background: var(--cyan);   bottom: -100px; right: -120px; animation: drift 18s ease-in-out infinite alternate-reverse; }
+    .orb-3 { width: 300px; height: 300px; background: #ff00aa;        top: 50%; left: 50%; transform: translate(-50%,-50%); animation: drift 22s ease-in-out infinite alternate; }
+
+    @keyframes drift {
+      from { transform: translate(0,0) scale(1); }
+      to   { transform: translate(40px, 30px) scale(1.08); }
+    }
+
+    /* floating particles */
+    .particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .particle {
+      position: absolute;
+      width: 2px; height: 2px;
+      border-radius: 50%;
+      background: var(--cyan);
+      opacity: 0;
+      animation: rise var(--d) ease-in var(--delay) infinite;
+    }
+    @keyframes rise {
+      0%   { transform: translateY(0) scale(1); opacity: 0; }
+      10%  { opacity: 0.7; }
+      90%  { opacity: 0.3; }
+      100% { transform: translateY(-100vh) scale(0.3); opacity: 0; }
+    }
+
+    /* ── Card ── */
+    .card {
+      position: relative; z-index: 10;
+      width: min(520px, 94vw);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 40px 36px 44px;
+      backdrop-filter: blur(24px);
+      box-shadow: 0 0 0 1px rgba(124,92,252,0.1),
+                  0 32px 80px rgba(0,0,0,0.5),
+                  inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo-ring {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--violet), var(--cyan));
+      margin-bottom: 16px;
+      box-shadow: 0 0 30px rgba(124,92,252,0.5);
+      animation: pulse-ring 3s ease-in-out infinite;
+    }
+    @keyframes pulse-ring {
+      0%,100% { box-shadow: 0 0 30px rgba(124,92,252,0.5); }
+      50%      { box-shadow: 0 0 50px rgba(0,229,255,0.6); }
+    }
+    .logo-ring svg { width: 28px; height: 28px; }
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+    }
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(90deg, var(--violet), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle { margin-top: 6px; font-size: 13px; color: var(--muted); letter-spacing: 0.3px; }
+
+    /* ── Password display ── */
+    .password-wrap {
+      position: relative;
+      margin-bottom: 24px;
+    }
+    .password-field {
+      width: 100%;
+      background: rgba(0,0,0,0.35);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 56px 18px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      color: var(--text);
+      letter-spacing: 1.5px;
+      outline: none;
+      transition: border-color .3s, box-shadow .3s;
+      pointer-events: none;
+      word-break: break-all;
+      min-height: 62px;
+    }
+    .password-field:focus { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(124,92,252,.2); }
+    .placeholder-text { color: rgba(232,234,246,0.25); font-size: 14px; letter-spacing: 0.5px; }
+
+    .copy-btn {
+      position: absolute; top: 50%; right: 14px; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); transition: color .2s, transform .2s;
+      padding: 6px; border-radius: 8px;
+    }
+    .copy-btn:hover { color: var(--cyan); transform: translateY(-50%) scale(1.2); }
+    .copy-btn svg { width: 20px; height: 20px; display: block; }
+    .copy-btn.copied { color: var(--green); animation: bounce .4s ease; }
+    @keyframes bounce { 0%,100%{transform:translateY(-50%) scale(1)} 50%{transform:translateY(-50%) scale(1.3)} }
+
+    /* copied toast */
+    .toast {
+      position: absolute; top: -36px; left: 50%; transform: translateX(-50%);
+      background: var(--green); color: #000; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 20px; white-space: nowrap;
+      opacity: 0; transition: opacity .3s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── Strength meter ── */
+    .strength-wrap { margin-bottom: 26px; }
+    .strength-label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; color: var(--muted); margin-bottom: 8px; font-weight: 500;
+    }
+    .strength-name { font-weight: 700; transition: color .4s; }
+    .strength-bars {
+      display: grid; grid-template-columns: repeat(4,1fr); gap: 5px;
+    }
+    .bar {
+      height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08);
+      overflow: hidden; position: relative;
+    }
+    .bar::after {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 3px;
+      transform: scaleX(0); transform-origin: left;
+      transition: transform .5s cubic-bezier(.4,0,.2,1);
+    }
+    .bar.active::after { transform: scaleX(1); }
+    .str-1 .bar.active::after { background: var(--red); }
+    .str-2 .bar.active::after { background: var(--amber); }
+    .str-3 .bar.active::after { background: var(--cyan); }
+    .str-4 .bar.active::after { background: var(--green); }
+
+    /* ── DNA helix SVG signature ── */
+    .helix-wrap {
+      display: flex; justify-content: center; margin-bottom: 26px;
+      height: 44px; align-items: center; gap: 6px;
+    }
+    .helix-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--violet); opacity: 0.3;
+      transition: opacity .4s, background .4s, transform .4s;
+    }
+    .helix-dot.lit {
+      opacity: 1;
+      transform: scale(1.4);
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    /* ── Length slider ── */
+    .section-label {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+    }
+    .slider-row {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 26px;
+    }
+    .length-num {
+      font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700;
+      min-width: 36px; text-align: center;
+      background: linear-gradient(135deg, var(--violet), var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    input[type=range] {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 5px; border-radius: 3px; outline: none; cursor: pointer;
+      background: rgba(255,255,255,0.1);
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--violet), var(--cyan));
+      box-shadow: 0 0 14px rgba(124,92,252,.6);
+      cursor: pointer; transition: transform .2s, box-shadow .2s;
+    }
+    input[type=range]:hover::-webkit-slider-thumb {
+      transform: scale(1.2);
+      box-shadow: 0 0 20px rgba(0,229,255,.7);
+    }
+
+    /* ── Toggles ── */
+    .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; }
+    .toggle-item {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1.5px solid var(--border);
+      border-radius: 14px; padding: 13px 14px;
+      cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s;
+      user-select: none;
+    }
+    .toggle-item:hover { border-color: rgba(124,92,252,.5); background: rgba(124,92,252,.07); }
+    .toggle-item.on {
+      border-color: var(--violet);
+      background: rgba(124,92,252,.14);
+      box-shadow: 0 0 14px rgba(124,92,252,.2);
+    }
+    .toggle-icon { font-size: 18px; width: 24px; text-align: center; }
+    .toggle-label { font-size: 13px; font-weight: 500; flex: 1; }
+    .toggle-switch {
+      width: 32px; height: 18px; border-radius: 9px;
+      background: rgba(255,255,255,0.1); position: relative;
+      transition: background .25s;
+      flex-shrink: 0;
+    }
+    .toggle-item.on .toggle-switch { background: var(--violet); }
+    .toggle-switch::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 12px; height: 12px; border-radius: 50%; background: white;
+      transition: transform .25s cubic-bezier(.4,0,.2,1);
+      box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    }
+    .toggle-item.on .toggle-switch::after { transform: translateX(14px); }
+
+    /* ── Generate button ── */
+    .gen-btn {
+      width: 100%; height: 58px; border: none; border-radius: 16px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px; font-weight: 700; letter-spacing: 0.5px; color: #fff;
+      background: linear-gradient(135deg, var(--violet) 0%, #5b34f5 50%, var(--cyan) 100%);
+      background-size: 200% 200%; background-position: 0% 50%;
+      position: relative; overflow: hidden;
+      transition: transform .2s, box-shadow .3s, background-position .5s;
+      box-shadow: 0 8px 30px rgba(124,92,252,.45);
+    }
+    .gen-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 40px rgba(124,92,252,.65);
+      background-position: 100% 50%;
+    }
+    .gen-btn:active { transform: translateY(0) scale(.98); }
+    .gen-btn-inner { display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; z-index: 1; }
+    .gen-btn svg { width: 20px; height: 20px; }
+
+    /* shimmer sweep on button */
+    .gen-btn::before {
+      content: '';
+      position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent);
+      transition: left .5s;
+    }
+    .gen-btn:hover::before { left: 160%; }
+
+    /* ripple on generate */
+    .ripple {
+      position: absolute; border-radius: 50%;
+      background: rgba(255,255,255,.3); transform: scale(0);
+      animation: ripple-anim .6s linear;
+      pointer-events: none;
+    }
+    @keyframes ripple-anim {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    /* ── Character stream animation ── */
+    @keyframes char-in {
+      from { opacity: 0; transform: translateY(-4px) scale(.8); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .char-anim { display: inline-block; animation: char-in .25s ease forwards; }
+  </style>
 </head>
-
 <body>
-    <div class="container">
-        <h1>Random password<br><span> Generator</span></h1>
-        <div class="display">
-            <input type="text" id="password" placeholder="Password"><i class="fa-solid fa-copy" id="copy"
-                onclick="copy()"></i>
-        </div>
-        <div class="button">
-            <button onclick="createPassword()"><i class="fa-solid fa-bolt"></i>Generate</button>
-        </div>
-    </div>
-</body>
 
+  <!-- background -->
+  <div class="bg-canvas">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+  <div class="particles" id="particles"></div>
+
+  <!-- card -->
+  <div class="card">
+
+    <!-- header -->
+    <div class="header">
+      <div class="logo-ring">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <h1>Pass<em>Forge</em></h1>
+      <p class="subtitle">Craft unbreakable passwords, instantly</p>
+    </div>
+
+    <!-- password output -->
+    <div class="password-wrap">
+      <div class="toast" id="toast">Copied!</div>
+      <div class="password-field" id="passwordDisplay">
+        <span class="placeholder-text">Hit Generate to forge your password ⚡</span>
+      </div>
+      <button class="copy-btn" id="copyBtn" onclick="copyPassword()" title="Copy to clipboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- strength -->
+    <div class="strength-wrap" id="strengthWrap">
+      <div class="strength-label">
+        <span>Strength</span>
+        <span class="strength-name" id="strengthName">—</span>
+      </div>
+      <div class="strength-bars str-1" id="strengthBars">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </div>
+    </div>
+
+    <!-- DNA helix visual -->
+    <div class="helix-wrap" id="helixWrap"></div>
+
+    <!-- length -->
+    <div class="section-label">Length</div>
+    <div class="slider-row">
+      <span class="length-num" id="lengthNum">16</span>
+      <input type="range" id="lengthSlider" min="6" max="64" value="16" oninput="onLengthChange(this.value)"/>
+    </div>
+
+    <!-- character type toggles -->
+    <div class="section-label">Character types</div>
+    <div class="toggles">
+      <div class="toggle-item on" id="t-upper" onclick="toggleOption('upper')">
+        <span class="toggle-icon">🔠</span>
+        <span class="toggle-label">Uppercase</span>
+        <div class="toggle-switch"></div>
+      </div>
+      <div class="toggle-item on" id="t-lower" onclick="toggleOption('lower')">
+        <span class="toggle-icon">🔡</span>
+        <span class="toggle-label">Lowercase</span>
+        <div class="toggle-switch"></div>
+      </div>
+      <div class="toggle-item on" id="t-numbers" onclick="toggleOption('numbers')">
+        <span class="toggle-icon">🔢</span>
+        <span class="toggle-label">Numbers</span>
+        <div class="toggle-switch"></div>
+      </div>
+      <div class="toggle-item on" id="t-symbols" onclick="toggleOption('symbols')">
+        <span class="toggle-icon">✦</span>
+        <span class="toggle-label">Symbols</span>
+        <div class="toggle-switch"></div>
+      </div>
+    </div>
+
+    <!-- generate button -->
+    <button class="gen-btn" id="genBtn" onclick="generatePassword(event)">
+      <span class="gen-btn-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        Generate Password
+      </span>
+    </button>
+
+  </div>
+
+  <script>
+    // ── Particles ──
+    const particleContainer = document.getElementById('particles');
+    const colors = ['#7c5cfc','#00e5ff','#00ff94','#ff00aa'];
+    for (let i = 0; i < 55; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.cssText = `
+        left: ${Math.random()*100}%;
+        bottom: -10px;
+        --d: ${6 + Math.random()*14}s;
+        --delay: ${Math.random()*12}s;
+        background: ${colors[Math.floor(Math.random()*colors.length)]};
+        width: ${1+Math.random()*3}px;
+        height: ${1+Math.random()*3}px;
+      `;
+      particleContainer.appendChild(p);
+    }
+
+    // ── Helix dots ──
+    const helixWrap = document.getElementById('helixWrap');
+    const DOT_COUNT = 28;
+    for (let i = 0; i < DOT_COUNT; i++) {
+      const d = document.createElement('div');
+      d.className = 'helix-dot';
+      helixWrap.appendChild(d);
+    }
+    const helixDots = document.querySelectorAll('.helix-dot');
+    const helixColors = ['var(--violet)','var(--cyan)','var(--green)','#ff00aa'];
+
+    function animateHelix(strength /* 0-4 */) {
+      helixDots.forEach((d,i) => {
+        const lit = i < Math.round((strength / 4) * DOT_COUNT);
+        d.classList.toggle('lit', lit);
+        d.style.background = helixColors[Math.floor(i / (DOT_COUNT/4)) % 4];
+        d.style.color = d.style.background;
+        const wave = Math.sin(i * 0.45 + Date.now()*0.001) * 14;
+        d.style.transform = lit ? `scale(1.4) translateY(${wave}px)` : '';
+      });
+    }
+
+    // oscillate helix continuously
+    (function oscillate() {
+      helixDots.forEach((d, i) => {
+        const wave = Math.sin(i * 0.45 + Date.now() * 0.002) * 12;
+        if (d.classList.contains('lit')) {
+          d.style.transform = `scale(1.4) translateY(${wave}px)`;
+        }
+      });
+      requestAnimationFrame(oscillate);
+    })();
+
+    // ── State ──
+    const options = { upper: true, lower: true, numbers: true, symbols: true };
+    let length = 16;
+    let currentPassword = '';
+
+    const UPPER   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const LOWER   = 'abcdefghijklmnopqrstuvwxyz';
+    const NUMBERS = '0123456789';
+    const SYMBOLS = '!@#$%^&*()_+[]{}|;:,.<>?~-=';
+
+    function toggleOption(key) {
+      // ensure at least one active
+      const activeCount = Object.values(options).filter(Boolean).length;
+      if (options[key] && activeCount === 1) return;
+      options[key] = !options[key];
+      document.getElementById('t-' + key).classList.toggle('on', options[key]);
+    }
+
+    function onLengthChange(val) {
+      length = parseInt(val);
+      document.getElementById('lengthNum').textContent = val;
+      updateSliderTrack(val);
+    }
+
+    function updateSliderTrack(val) {
+      const slider = document.getElementById('lengthSlider');
+      const pct = ((val - 6) / (64 - 6)) * 100;
+      slider.style.background = `linear-gradient(to right, var(--violet) ${pct}%, rgba(255,255,255,0.1) ${pct}%)`;
+    }
+    updateSliderTrack(16);
+
+    function getStrength(pwd) {
+      if (!pwd) return 0;
+      let score = 0;
+      if (pwd.length >= 8)  score++;
+      if (pwd.length >= 16) score++;
+      if (/[A-Z]/.test(pwd) && /[a-z]/.test(pwd)) score++;
+      if (/[0-9]/.test(pwd)) score++;
+      if (/[^A-Za-z0-9]/.test(pwd)) score++;
+      return Math.min(4, Math.ceil(score / 5 * 4) || (pwd.length >= 6 ? 1 : 0));
+    }
+
+    const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Strong', 'Unbreakable ⚡'];
+    const STRENGTH_COLORS = ['', 'var(--red)', 'var(--amber)', 'var(--cyan)', 'var(--green)'];
+
+    function updateStrengthUI(pwd) {
+      const s = getStrength(pwd);
+      const bars = document.querySelectorAll('#strengthBars .bar');
+      const barsWrap = document.getElementById('strengthBars');
+      barsWrap.className = `strength-bars str-${s}`;
+      bars.forEach((b, i) => b.classList.toggle('active', i < s));
+      const nameEl = document.getElementById('strengthName');
+      nameEl.textContent = STRENGTH_LABELS[s] || '—';
+      nameEl.style.color = STRENGTH_COLORS[s] || 'var(--muted)';
+      animateHelix(s);
+    }
+
+    function generatePassword(e) {
+      // ripple
+      const btn = document.getElementById('genBtn');
+      const rect = btn.getBoundingClientRect();
+      const rip = document.createElement('div');
+      rip.className = 'ripple';
+      const size = Math.max(btn.clientWidth, btn.clientHeight);
+      rip.style.cssText = `width:${size}px;height:${size}px;left:${(e?.clientX??rect.left+rect.width/2)-rect.left-size/2}px;top:${(e?.clientY??rect.top+rect.height/2)-rect.top-size/2}px`;
+      btn.appendChild(rip);
+      rip.addEventListener('animationend', () => rip.remove());
+
+      let pool = '';
+      const guaranteed = [];
+      if (options.upper)   { pool += UPPER;   guaranteed.push(UPPER[Math.floor(Math.random()*UPPER.length)]); }
+      if (options.lower)   { pool += LOWER;   guaranteed.push(LOWER[Math.floor(Math.random()*LOWER.length)]); }
+      if (options.numbers) { pool += NUMBERS; guaranteed.push(NUMBERS[Math.floor(Math.random()*NUMBERS.length)]); }
+      if (options.symbols) { pool += SYMBOLS; guaranteed.push(SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)]); }
+
+      const arr = [...guaranteed];
+      for (let i = arr.length; i < length; i++) {
+        arr.push(pool[Math.floor(Math.random() * pool.length)]);
+      }
+      // shuffle
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      currentPassword = arr.join('');
+
+      // animated character display
+      const display = document.getElementById('passwordDisplay');
+      display.innerHTML = '';
+      currentPassword.split('').forEach((ch, i) => {
+        const span = document.createElement('span');
+        span.className = 'char-anim';
+        span.style.animationDelay = `${i * 18}ms`;
+        span.textContent = ch;
+        display.appendChild(span);
+      });
+
+      updateStrengthUI(currentPassword);
+    }
+
+    function copyPassword() {
+      if (!currentPassword) return;
+      navigator.clipboard.writeText(currentPassword).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = currentPassword; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      });
+      const btn = document.getElementById('copyBtn');
+      btn.classList.add('copied');
+      const toast = document.getElementById('toast');
+      toast.classList.add('show');
+      setTimeout(() => { btn.classList.remove('copied'); toast.classList.remove('show'); }, 2000);
+    }
+
+    // keyboard shortcut
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') generatePassword();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && currentPassword) copyPassword();
+    });
+  </script>
+</body>
 </html>
